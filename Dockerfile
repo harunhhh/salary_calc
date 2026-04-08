@@ -4,15 +4,18 @@
 FROM maven:3.8.5-openjdk-17 AS build
 WORKDIR /app
 COPY . .
-# ★修正ポイント：組み立てた直後に、邪魔な「ダミー（plain.jar）」を完全に削除する！
-RUN mvn clean package -DskipTests && rm -f target/*-plain.jar
+RUN mvn clean package -DskipTests
 
 # ==========================================
-# ステップ2：本物の完成品だけを超軽量な箱に移す
+# ステップ2：超軽量な箱に移して、本物を探し出して起動！
 # ==========================================
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
-COPY --from=build /app/target/*.jar app.jar
+
+# 組み立てた結果（targetフォルダ）を丸ごと持ってくる
+COPY --from=build /app/target/ /app/target/
 
 EXPOSE 8080
-CMD ["java", "-jar", "app.jar"]
+
+# ★最強の呪文：一番容量が大きい（＝本物の）jarファイルを自動で探して起動する！
+CMD ["sh", "-c", "java -jar $(ls -S /app/target/*.jar | head -n 1)"]
