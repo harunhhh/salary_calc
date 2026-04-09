@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>給料計算ダッシュボード</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #f4f7f6; color: #333; }
+        .container { max-width: 650px; margin: 0 auto; }
+        .card { background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        input[type='number'] { padding: 8px; border: 1px solid #ccc; border-radius: 5px; width: 100px; font-size: 16px; }
+        button { padding: 8px 15px; background: #3498db; color: #fff; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; }
+        .error { background: #ffebee; color: #c62828; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div th:if="${errorMessage != null}" class="card error">
+            <h3>❌ エラーが発生しました</h3>
+            <p th:text="${errorMessage}"></p>
+        </div>
+
+        <h2 style="color: #2c3e50;">📱 <span th:text="${userName}"></span>さんの給与ダッシュボード</h2>
+
+        <div class="card">
+            <form method="get" action="/">
+                <label>💰 時給: </label>
+                <input type="number" name="wage" th:value="${hourlyWage}"> 円 
+                <button type="submit">再計算</button>
+            </form>
+        </div>
+
+        <div th:if="${hasShifts == false}" class="card">
+            <p>今月のシフトは見つかりませんでした。</p>
+        </div>
+
+        <div th:if="${hasShifts == true}" class="card" style="background: #e8f4f8;">
+            <h3 style="margin-top:0;">📊 今月の集計</h3>
+            <p>実働時間: <strong th:text="${totalWorkHours} + ' 時間'"></strong></p>
+            <p>休憩時間: <span th:text="${totalBreakHours} + ' 時間'"></span></p>
+            <p>残業時間: <span style="color:red;" th:text="${totalOvertimeHours} + ' 時間'"></span></p>
+            <hr>
+            <h2 style="color:#e74c3c;">💴 予想給与: <span th:text="${#numbers.formatInteger(totalSalary, 1, 'COMMA')}"></span> 円</h2>
+            <p style="font-size:0.8em; color:#7f8c8d;">※残業代（時給1.25倍）を含みます</p>
+        </div>
+    </div>
+</body>
+</html>
