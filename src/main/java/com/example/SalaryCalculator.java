@@ -49,19 +49,20 @@ public class SalaryCalculator {
 
         String userName = oauth2User.getAttribute("name");
 
+        // ★修正ポイント1： html変数の作成は最初の一回だけ！
+        // ★修正ポイント2： 古いデザインと新しいデザインのタグを綺麗に合体させました
         StringBuilder html = new StringBuilder();
-        html.append("<html><head><meta charset='UTF-8'><title>給料計算システム</title></head>");
-        html.append("<body style='font-family: sans-serif; padding: 30px; background-color: #f4f7f6;'>");
-        html.append("<div style='max-width: 650px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);'>");
-        
-        // ★画面にログインした人の名前を表示します
-        html.append("<h1 style='color: #2c3e50;'>📅 " + userName + "さんの給料計算</h1>");
-        html.append("<ul style='line-height: 1.8; font-size: 14px;'>");
+        html.append("<html><head>");
+        html.append("<meta charset='UTF-8'>");
+        html.append("<meta name='viewport' content='width=device-width, initial-scale=1.0'>");
+        html.append("<title>給料計算ダッシュボード</title>");
+        html.append("<style>body{font-family:sans-serif; padding:20px; background:#f4f7f6; color:#333;} .container{max-width: 650px; margin: 0 auto;} .card{background:#fff; padding:20px; border-radius:10px; box-shadow:0 4px 8px rgba(0,0,0,0.1); margin-bottom:20px;} input[type='number']{padding:8px; border:1px solid #ccc; border-radius:5px; width:100px; font-size:16px;} button{padding:8px 15px; background:#3498db; color:#fff; border:none; border-radius:5px; cursor:pointer; font-size:16px;}</style>");
+        html.append("</head><body>");
+        html.append("<div class='container'>"); // 全体を中央寄せにするコンテナ
 
         try {
             final NetHttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
             
-            // ★ローカルの鍵ではなく、Googleから受け取った「ログイン中の人の一時的な鍵」を使います
             Credential credential = new Credential(BearerToken.authorizationHeaderAccessMethod())
                     .setAccessToken(authorizedClient.getAccessToken().getTokenValue());
 
@@ -79,22 +80,15 @@ public class SalaryCalculator {
 
             List<Event> items = events.getItems();
             
-            // ★合計時間の入れ物（ダッシュボード用）
-            double totalShiftHours = 0.0; // シフトの総時間（拘束時間）
-            double totalBreakHours = 0.0; // 総休憩時間
-            double totalWorkHours = 0.0;  // 総実働時間
-            double totalOvertimeHours = 0.0; // 総残業時間
-            int totalSalary = 0; // 総給与
+            double totalShiftHours = 0.0;
+            double totalBreakHours = 0.0;
+            double totalWorkHours = 0.0;
+            double totalOvertimeHours = 0.0;
+            int totalSalary = 0;
 
-            StringBuilder html = new StringBuilder();
-            html.append("<html><head><meta name='viewport' content='width=device-width, initial-scale=1.0'>");
-            // ちょっとおしゃれにするCSS
-            html.append("<style>body{font-family:sans-serif; padding:15px; background:#f4f7f6; color:#333;} .card{background:#fff; padding:15px; border-radius:10px; box-shadow:0 2px 5px rgba(0,0,0,0.1); margin-bottom:15px;} input[type='number']{padding:8px; border:1px solid #ccc; border-radius:5px; width:100px;} button{padding:8px 15px; background:#3498db; color:#fff; border:none; border-radius:5px; cursor:pointer;}</style>");
-            html.append("</head><body>");
+            html.append("<h2 style='color: #2c3e50;'>📱 " + userName + "さんの給与ダッシュボード</h2>");
 
-            html.append("<h2>📱 " + userName + "さんの給与ダッシュボード</h2>");
-
-            // ★① 画面から時給を変更できるフォーム
+            // ① 画面から時給を変更できるフォーム
             html.append("<div class='card'>");
             html.append("<form method='get' action='/'>");
             html.append("<label>💰 時給: </label>");
@@ -103,16 +97,14 @@ public class SalaryCalculator {
             html.append("</form>");
             html.append("</div>");
 
-            // カレンダーの予定を1つずつループして計算
             if (items.isEmpty()) {
-                html.append("<p>今月のシフトは見つかりませんでした。</p>");
+                html.append("<div class='card'><p>今月のシフトは見つかりませんでした。</p></div>");
             } else {
                 for (Event event : items) {
                     DateTime start = event.getStart().getDateTime();
                     DateTime end = event.getEnd().getDateTime();
                     
                     if (start != null && end != null) {
-                        // ミリ秒を「時間（hour）」に変換
                         long durationMs = end.getValue() - start.getValue();
                         double shiftHours = durationMs / (1000.0 * 60.0 * 60.0);
                         
@@ -120,33 +112,29 @@ public class SalaryCalculator {
                         double actualWork = 0.0;
                         double overtime = 0.0;
 
-                        // ★休憩時間の自動判定ロジック
                         if (shiftHours >= 8.0) {
-                            breakTime = 1.0; // 8時間以上拘束なら1時間休憩
+                            breakTime = 1.0;
                         } else if (shiftHours > 6.0) {
-                            breakTime = 0.75; // 6時間超えなら45分(0.75時間)休憩
+                            breakTime = 0.75;
                         }
 
                         actualWork = shiftHours - breakTime;
 
-                        // ★残業時間の自動判定（1日8時間を超えた分）
                         if (actualWork > 8.0) {
                             overtime = actualWork - 8.0;
                         }
 
-                        // 合計に足していく
                         totalShiftHours += shiftHours;
                         totalBreakHours += breakTime;
                         totalWorkHours += actualWork;
                         totalOvertimeHours += overtime;
 
-                        // 今回の給料計算（※残業は時給1.25倍で計算するおまけ付き！）
                         double normalWork = actualWork - overtime;
                         totalSalary += (int) ((normalWork * hourlyWage) + (overtime * hourlyWage * 1.25));
                     }
                 }
 
-                // ★② 労働時間の合計を表示するダッシュボード
+                // ② 労働時間の合計を表示するダッシュボード
                 html.append("<div class='card' style='background:#e8f4f8;'>");
                 html.append("<h3 style='margin-top:0;'>📊 今月の集計</h3>");
                 html.append("<p>🕒 実働時間: <strong>" + String.format("%.2f", totalWorkHours) + " 時間</strong></p>");
@@ -158,16 +146,16 @@ public class SalaryCalculator {
                 html.append("</div>");
             }
 
-            html.append("</body></html>");
+            html.append("</div></body></html>"); // コンテナとbodyを閉じる
             
-        }catch (Exception e) {
-            // もしGoogleカレンダーの取得などでエラーが起きたら、画面にエラー理由を出す
+        } catch (Exception e) {
             html.append("<div class='card' style='background:#ffebee; color:#c62828;'>");
             html.append("<h3>❌ エラーが発生しました</h3>");
             html.append("<p>" + e.getMessage() + "</p>");
-            html.append("</div></body></html>");
-            e.printStackTrace(); // Renderのログにもエラー詳細を出す
+            html.append("</div></div></body></html>"); // エラー時もちゃんとタグを閉じる
+            e.printStackTrace();
         }
+        
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_TYPE, "text/html; charset=UTF-8")
                 .body(html.toString());
