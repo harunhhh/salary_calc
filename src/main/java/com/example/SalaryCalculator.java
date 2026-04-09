@@ -41,19 +41,13 @@ public class SalaryCalculator {
     }
 
     // ★大進化！ ログインした人の情報（oauth2User）と、その人の鍵（authorizedClient）を自動で受け取ります
-    @GetMapping(value = "/", produces = "text/html; charset=UTF-8")
+    @GetMapping("/")
     public ResponseEntity<String> home(
             @RegisteredOAuth2AuthorizedClient("google") OAuth2AuthorizedClient authorizedClient,
             @AuthenticationPrincipal OAuth2User oauth2User,
-            @RequestParam(value = "wage", defaultValue = "1260") int hourlyWage) {
+            @RequestParam(value = "wage", defaultValue = "1260") int hourlyWage) throws Exception {
 
-        // ログインした人の名前を取得！
         String userName = oauth2User.getAttribute("name");
-
-        double totalStandardHours = 0.0;
-        double totalOvertimeHours = 0.0;
-        double totalNightHours = 0.0;
-        double totalRestHours = 0.0;
 
         StringBuilder html = new StringBuilder();
         html.append("<html><head><meta charset='UTF-8'><title>給料計算システム</title></head>");
@@ -84,51 +78,96 @@ public class SalaryCalculator {
                     .setTimeMin(timeMin).setTimeMax(timeMax).setOrderBy("startTime").setSingleEvents(true).execute();
 
             List<Event> items = events.getItems();
+            
+            // ★合計時間の入れ物（ダッシュボード用）
+            double totalShiftHours = 0.0; // シフトの総時間（拘束時間）
+            double totalBreakHours = 0.0; // 総休憩時間
+            double totalWorkHours = 0.0;  // 総実働時間
+            double totalOvertimeHours = 0.0; // 総残業時間
+            int totalSalary = 0; // 総給与
+
+            StringBuilder html = new StringBuilder();
+            html.append("<html><head><meta name='viewport' content='width=device-width, initial-scale=1.0'>");
+            // ちょっとおしゃれにするCSS
+            html.append("<style>body{font-family:sans-serif; padding:15px; background:#f4f7f6; color:#333;} .card{background:#fff; padding:15px; border-radius:10px; box-shadow:0 2px 5px rgba(0,0,0,0.1); margin-bottom:15px;} input[type='number']{padding:8px; border:1px solid #ccc; border-radius:5px; width:100px;} button{padding:8px 15px; background:#3498db; color:#fff; border:none; border-radius:5px; cursor:pointer;}</style>");
+            html.append("</head><body>");
+
+            html.append("<h2>📱 " + userName + "さんの給与ダッシュボード</h2>");
+
+            // ★① 画面から時給を変更できるフォーム
+            html.append("<div class='card'>");
+            html.append("<form method='get' action='/'>");
+            html.append("<label>💰 時給: </label>");
+            html.append("<input type='number' name='wage' value='" + hourlyWage + "'> 円 ");
+            html.append("<button type='submit'>再計算</button>");
+            html.append("</form>");
+            html.append("</div>");
+
+            // カレンダーの予定を1つずつループして計算
             if (items.isEmpty()) {
-                html.append("<li>今月の予定は見つかりませんでした。</li>");
+                html.append("<p>今月のシフトは見つかりませんでした。</p>");
             } else {
                 for (Event event : items) {
-                    String shiftTitle = event.getSummary();
-                    if (shiftTitle != null) {
-                        double rawHours = calculateRawHours(shiftTitle);
-                        if (rawHours > 0) {
-                            double restHours = calculateRestTime(rawHours);
-                            double actualHours = rawHours - restHours;
-                            double nightHours = calculateNightHours(shiftTitle);
-                            double standard = (actualHours > 8.0) ? 8.0 : actualHours;
-                            double overtime = (actualHours > 8.0) ? actualHours - 8.0 : 0.0;
+                    DateTime start = event.getStart().getDateTime();
+                    DateTime end = event.getEnd().getDateTime();
+                    
+                    if (start != null && end != null) {
+                        // ミリ秒を「時間（hour）」に変換
+                        long durationMs = end.getValue() - start.getValue();
+                        double shiftHours = durationMs / (1000.0 * 60.0 * 60.0);
+                        
+                        double breakTime = 0.0;
+                        double actualWork = 0.0;
+                        double overtime = 0.0;
 
-                            totalStandardHours += standard;
-                            totalOvertimeHours += overtime;
-                            totalNightHours += nightHours;
-                            totalRestHours += restHours;
-
-                            DateTime start = event.getStart().getDateTime();
-                            if (start == null) start = event.getStart().getDate();
-                            String dateStr = start.toString().substring(0, 10);
-
-                            html.append(String.format("<li><strong>%s</strong> [%s] -> 基本: %.1fh | 残業: %.1fh | 深夜: %.1fh (休憩: %.1fh)</li>", 
-                                    dateStr, shiftTitle, standard, overtime, nightHours, restHours));
+                        // ★休憩時間の自動判定ロジック
+                        if (shiftHours >= 8.0) {
+                            breakTime = 1.0; // 8時間以上拘束なら1時間休憩
+                        } else if (shiftHours > 6.0) {
+                            breakTime = 0.75; // 6時間超えなら45分(0.75時間)休憩
                         }
+
+                        actualWork = shiftHours - breakTime;
+
+                        // ★残業時間の自動判定（1日8時間を超えた分）
+                        if (actualWork > 8.0) {
+                            overtime = actualWork - 8.0;
+                        }
+
+                        // 合計に足していく
+                        totalShiftHours += shiftHours;
+                        totalBreakHours += breakTime;
+                        totalWorkHours += actualWork;
+                        totalOvertimeHours += overtime;
+
+                        // 今回の給料計算（※残業は時給1.25倍で計算するおまけ付き！）
+                        double normalWork = actualWork - overtime;
+                        totalSalary += (int) ((normalWork * hourlyWage) + (overtime * hourlyWage * 1.25));
                     }
                 }
+
+                // ★② 労働時間の合計を表示するダッシュボード
+                html.append("<div class='card' style='background:#e8f4f8;'>");
+                html.append("<h3 style='margin-top:0;'>📊 今月の集計</h3>");
+                html.append("<p>🕒 実働時間: <strong>" + String.format("%.2f", totalWorkHours) + " 時間</strong></p>");
+                html.append("<p>☕ 休憩時間: " + String.format("%.2f", totalBreakHours) + " 時間</p>");
+                html.append("<p>🔥 残業時間: <span style='color:red;'>" + String.format("%.2f", totalOvertimeHours) + " 時間</span></p>");
+                html.append("<hr>");
+                html.append("<h2 style='color:#e74c3c;'>💴 予想給与: " + String.format("%,d", totalSalary) + " 円</h2>");
+                html.append("<p style='font-size:0.8em; color:#7f8c8d;'>※残業代（時給1.25倍）を含みます</p>");
+                html.append("</div>");
             }
 
-            int standardPay = (int) (totalStandardHours * hourlyWage);
-            int overtimePay = (int) (totalOvertimeHours * hourlyWage * 1.25);
-            int nightPay = (int) (totalNightHours * hourlyWage * 0.25);
-            int totalSalary = standardPay + overtimePay + nightPay;
-
-            html.append("</ul>");
-            html.append("<hr style='border: none; border-top: 1px solid #ddd; margin: 20px 0;'>");
-            html.append("<h2 style='color: #2980b9;'>💰 今月の見込み給料</h2>");
-            html.append(String.format("<h3 style='color: #e74c3c; font-size: 24px; text-align: center; background: #fff3f3; padding: 15px; border-radius: 8px;'>✨ %,d 円</h3>", totalSalary));
-
-        } catch (Exception e) {
-            html.append("<p style='color:red;'>❌ エラーが発生しました: " + e.getMessage() + "</p>");
+            html.append("</body></html>");
+            
+        }catch (Exception e) {
+            // もしGoogleカレンダーの取得などでエラーが起きたら、画面にエラー理由を出す
+            html.append("<div class='card' style='background:#ffebee; color:#c62828;'>");
+            html.append("<h3>❌ エラーが発生しました</h3>");
+            html.append("<p>" + e.getMessage() + "</p>");
+            html.append("</div></body></html>");
+            e.printStackTrace(); // Renderのログにもエラー詳細を出す
         }
-
-        html.append("</div></body></html>");
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_TYPE, "text/html; charset=UTF-8")
                 .body(html.toString());
