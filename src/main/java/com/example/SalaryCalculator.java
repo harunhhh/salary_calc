@@ -97,49 +97,93 @@ public class SalaryCalculator {
             html.append("</form>");
             html.append("</div>");
 
+            // カレンダーの予定を1つずつループして計算
             if (items.isEmpty()) {
                 html.append("<div class='card'><p>今月のシフトは見つかりませんでした。</p></div>");
             } else {
+                java.util.Map<String, Double> dailyHours = new java.util.HashMap<>();
+
                 for (Event event : items) {
-                    DateTime start = event.getStart().getDateTime();
-                    DateTime end = event.getEnd().getDateTime();
-                    
-                    if (start != null && end != null) {
-                        long durationMs = end.getValue() - start.getValue();
-                        double shiftHours = durationMs / (1000.0 * 60.0 * 60.0);
-                        
-                        double breakTime = 0.0;
-                        double actualWork = 0.0;
-                        double overtime = 0.0;
+                    String summary = event.getSummary();
+                    double shiftHours = 0.0;
+                    boolean hasTime = false;
+                    String dateKey = "";
 
-                        if (shiftHours >= 8.0) {
-                            breakTime = 1.0;
-                        } else if (shiftHours > 6.0) {
-                            breakTime = 0.75;
+                    // ★カレンダーの日付を取得（時間指定 or 終日予定どちらでもOK！）
+                    if (event.getStart().getDateTime() != null) {
+                        dateKey = new java.text.SimpleDateFormat("yyyy-MM-dd")
+                                .format(new java.util.Date(event.getStart().getDateTime().getValue()));
+                    } else if (event.getStart().getDate() != null) {
+                        dateKey = event.getStart().getDate().toString().substring(0, 10);
+                    }
+
+                    if (dateKey.isEmpty()) continue;
+
+                    // ★最強AI機能：タイトルから「9-0」のような数字を読み取る！
+                    if (summary != null) {
+                        // "9-0"、"10-19"、"9〜0" のような文字を探す
+                        java.util.regex.Matcher m = java.util.regex.Pattern.compile("([0-9]{1,2})\\s*[-〜~]\\s*([0-9]{1,2})").matcher(summary);
+                        if (m.find()) {
+                            int s = Integer.parseInt(m.group(1));
+                            int e = Integer.parseInt(m.group(2));
+                            if (e <= s) {
+                                e += 24; // 終了時間が開始時間より小さい場合（0時など）は翌日の24時扱い
+                            }
+                            shiftHours = (double) (e - s);
+                            hasTime = true;
                         }
+                    }
 
-                        actualWork = shiftHours - breakTime;
-
-                        if (actualWork > 8.0) {
-                            overtime = actualWork - 8.0;
+                    // ★タイトルに時間が書いていない場合は、カレンダーの登録時間を使う
+                    if (!hasTime) {
+                        DateTime start = event.getStart().getDateTime();
+                        DateTime end = event.getEnd().getDateTime();
+                        if (start != null && end != null) {
+                            long durationMs = end.getValue() - start.getValue();
+                            shiftHours = durationMs / (1000.0 * 60.0 * 60.0);
+                            hasTime = true;
                         }
+                    }
 
-                        totalShiftHours += shiftHours;
-                        totalBreakHours += breakTime;
-                        totalWorkHours += actualWork;
-                        totalOvertimeHours += overtime;
-
-                        double normalWork = actualWork - overtime;
-                        totalSalary += (int) ((normalWork * hourlyWage) + (overtime * hourlyWage * 1.25));
+                    // 時間が計算できたら、その日の合計に足し算！
+                    if (hasTime && shiftHours > 0) {
+                        dailyHours.put(dateKey, dailyHours.getOrDefault(dateKey, 0.0) + shiftHours);
                     }
                 }
 
-                // ② 労働時間の合計を表示するダッシュボード
+                // ② まとめた「1日ごとの合計時間」を使って、休憩と残業を計算する
+                for (double dailyShift : dailyHours.values()) {
+                    double breakTime = 0.0;
+                    double actualWork = 0.0;
+                    double overtime = 0.0;
+
+                    if (dailyShift >= 8.0) {
+                        breakTime = 1.0;
+                    } else if (dailyShift > 6.0) {
+                        breakTime = 0.75;
+                    }
+
+                    actualWork = dailyShift - breakTime;
+
+                    if (actualWork > 8.0) {
+                        overtime = actualWork - 8.0;
+                    }
+
+                    totalShiftHours += dailyShift;
+                    totalBreakHours += breakTime;
+                    totalWorkHours += actualWork;
+                    totalOvertimeHours += overtime;
+
+                    double normalWork = actualWork - overtime;
+                    totalSalary += (int) ((normalWork * hourlyWage) + (overtime * hourlyWage * 1.25));
+                }
+
+                // ③ 労働時間の合計を表示するダッシュボード
                 html.append("<div class='card' style='background:#e8f4f8;'>");
                 html.append("<h3 style='margin-top:0;'>📊 今月の集計</h3>");
-                html.append("<p>🕒 実働時間: <strong>" + String.format("%.2f", totalWorkHours) + " 時間</strong></p>");
-                html.append("<p>☕ 休憩時間: " + String.format("%.2f", totalBreakHours) + " 時間</p>");
-                html.append("<p>🔥 残業時間: <span style='color:red;'>" + String.format("%.2f", totalOvertimeHours) + " 時間</span></p>");
+                html.append("<p>実働時間: <strong>" + String.format("%.2f", totalWorkHours) + " 時間</strong></p>");
+                html.append("<p>休憩時間: " + String.format("%.2f", totalBreakHours) + " 時間</p>");
+                html.append("<p>残業時間: <span style='color:red;'>" + String.format("%.2f", totalOvertimeHours) + " 時間</span></p>");
                 html.append("<hr>");
                 html.append("<h2 style='color:#e74c3c;'>💴 予想給与: " + String.format("%,d", totalSalary) + " 円</h2>");
                 html.append("<p style='font-size:0.8em; color:#7f8c8d;'>※残業代（時給1.25倍）を含みます</p>");
