@@ -20,8 +20,16 @@
             <p th:text="${errorMessage}"></p>
         </div>
 
-        <h2 style="color: #2c3e50;"> <span th:text="${userName}"></span>さんの給与ダッシュボード</h2>
+        <div style="display: flex; align-items: center; justify-content: center; gap: 30px;">
+            <a th:href="@{/(year=${prevYear}, month=${prevMonth}, wage=${hourlyWage})}" 
+            style="text-decoration: none; font-size: 1.5rem;">◀ 前月</a>
 
+            <h2 th:text="${displayYear} + '年 ' + ${displayMonth} + '月'">2024年 4月</h2>
+
+            <a th:href="@{/(year=${nextYear}, month=${nextMonth}, wage=${hourlyWage})}" 
+            style="text-decoration: none; font-size: 1.5rem;">次月 ▶</a>
+        </div>
+        
         <div class="card">
             <form method="get" action="/">
                 <label> 時給: </label>

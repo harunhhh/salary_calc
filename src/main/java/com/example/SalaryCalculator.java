@@ -41,34 +41,55 @@ public class SalaryCalculator {
     }
 
     @GetMapping("/")
+    
 
     public String home( 
             @RegisteredOAuth2AuthorizedClient("google") OAuth2AuthorizedClient authorizedClient,
             @AuthenticationPrincipal OAuth2User oauth2User,
+            @RequestParam(value = "year", required = false) Integer year,
+            @RequestParam(value = "month", required = false) Integer month,
             @RequestParam(value = "wage", defaultValue = "1260") int hourlyWage,
             Model model) throws Exception {
 
         String userName = oauth2User.getAttribute("name");
-        
-        // 画面に渡す基本データ
         model.addAttribute("userName", userName);
         model.addAttribute("hourlyWage", hourlyWage);
 
         try {
             final NetHttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
-            
             Credential credential = new Credential(BearerToken.authorizationHeaderAccessMethod())
                     .setAccessToken(authorizedClient.getAccessToken().getTokenValue());
 
             Calendar service = new Calendar.Builder(HTTP_TRANSPORT, JSON_FACTORY, credential)
                     .setApplicationName(APPLICATION_NAME).build();
 
-            YearMonth currentMonth = YearMonth.now();
-            ZonedDateTime startOfMonth = currentMonth.atDay(1).atStartOfDay(ZoneId.systemDefault());
-            ZonedDateTime endOfMonth = currentMonth.atEndOfMonth().atTime(23, 59, 59).atZone(ZoneId.systemDefault());
+            YearMonth targetMonth;
+            if (year != null && month != null) {
+                // URLで指定された年月を使う
+                targetMonth = YearMonth.of(year, month);
+            } else {
+                // 指定がない場合は現在の年月を使う
+                targetMonth = YearMonth.now();
+            }
+
+            // 前月と次月を計算（HTMLのリンク用）
+            YearMonth prevMonth = targetMonth.minusMonths(1);
+            YearMonth nextMonth = targetMonth.plusMonths(1);
+
+            // 画面表示用のデータをModelにセット
+            model.addAttribute("displayYear", targetMonth.getYear());
+            model.addAttribute("displayMonth", targetMonth.getMonthValue());
+            model.addAttribute("prevYear", prevMonth.getYear());
+            model.addAttribute("prevMonth", prevMonth.getMonthValue());
+            model.addAttribute("nextYear", nextMonth.getYear());
+            model.addAttribute("nextMonth", nextMonth.getMonthValue());
+            
+            ZonedDateTime startOfMonth = targetMonth.atDay(1).atStartOfDay(ZoneId.systemDefault());
+            ZonedDateTime endOfMonth = targetMonth.atEndOfMonth().atTime(23, 59, 59).atZone(ZoneId.systemDefault());
+
             DateTime timeMin = new DateTime(startOfMonth.toInstant().toEpochMilli());
             DateTime timeMax = new DateTime(endOfMonth.toInstant().toEpochMilli());
-
+            
             Events events = service.events().list("primary")
                     .setTimeMin(timeMin).setTimeMax(timeMax).setOrderBy("startTime").setSingleEvents(true).execute();
 
