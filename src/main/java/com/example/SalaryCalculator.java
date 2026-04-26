@@ -162,14 +162,23 @@ public class SalaryCalculator {
     }
 
     public static double calculateHours(String summary) {
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile("([0-9]{1,2})\\s*[-〜~]\\s*([0-9]{1,2})").matcher(summary);
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("([0-9.]+)\\s*[-〜~]\\s*([0-9.]+)").matcher(summary);
+        
         if (m.find()) {
-            int s = Integer.parseInt(m.group(1));
-            int e = Integer.parseInt(m.group(2));
-            if (e <= s) {
-                e += 24; 
+            try {
+                double s = Double.parseDouble(m.group(1));
+                double e = Double.parseDouble(m.group(2));
+                
+                if (e <= s) {
+                    e += 24.0; // 深夜・日またぎ対応（22.5-1.0 は 25.0扱いにする）
+                }
+                
+                return e - s;
+                
+            } catch (NumberFormatException ex) {
+                // 万が一「9..5」のようにおかしな数字が入っていてエラーになった時用
+                return 0.0;
             }
-            return (double) (e - s);
         }
         return 0.0;
     }
