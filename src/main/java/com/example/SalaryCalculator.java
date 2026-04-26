@@ -10,6 +10,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
 
 import com.google.api.client.auth.oauth2.BearerToken;
 import com.google.api.client.auth.oauth2.Credential;
@@ -28,6 +29,7 @@ import java.time.ZonedDateTime;
 import java.util.List;
 
 @SpringBootApplication
+
 @Controller
 public class SalaryCalculator {
 
@@ -39,6 +41,7 @@ public class SalaryCalculator {
     }
 
     @GetMapping("/")
+
     public String home( 
             @RegisteredOAuth2AuthorizedClient("google") OAuth2AuthorizedClient authorizedClient,
             @AuthenticationPrincipal OAuth2User oauth2User,
@@ -84,6 +87,7 @@ public class SalaryCalculator {
                 java.util.Map<String, Double> dailyHours = new java.util.HashMap<>();
 
                 for (Event event : items) {
+                    
                     String summary = event.getSummary();
                     double shiftHours = 0.0;
                     boolean hasTime = false;
@@ -94,16 +98,6 @@ public class SalaryCalculator {
                     if (summary != null) {
                         shiftHours = calculateHours(summary);
                         if (shiftHours > 0) {
-                            hasTime = true;
-                        }
-                    }
-
-                    if (!hasTime) {
-                        DateTime start = event.getStart().getDateTime();
-                        DateTime end = event.getEnd().getDateTime();
-                        if (start != null && end != null) {
-                            long durationMs = end.getValue() - start.getValue();
-                            shiftHours = durationMs / (1000.0 * 60.0 * 60.0);
                             hasTime = true;
                         }
                     }
@@ -147,9 +141,7 @@ public class SalaryCalculator {
         return "dashboard"; 
     }
 
-    // =========================================================
-    // ▼ 計算ロジック
-    // =========================================================
+
     public static String getCalendar(Event event) {
         if (event.getStart().getDateTime() != null) {
             return new java.text.SimpleDateFormat("yyyy-MM-dd")
@@ -162,21 +154,23 @@ public class SalaryCalculator {
     }
 
     public static double calculateHours(String summary) {
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile("([0-9.]+)\\s*[-〜~]\\s*([0-9.]+)").matcher(summary);
+        // 文字が含まれていたら除外
+        String regex = "^\\s*([0-9.]+)\\s*[-〜~]\\s*([0-9.]+)\\s*$";
         
-        if (m.find()) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile(regex).matcher(summary);
+        
+        if (m.matches()) {
             try {
                 double s = Double.parseDouble(m.group(1));
                 double e = Double.parseDouble(m.group(2));
                 
                 if (e <= s) {
-                    e += 24.0; // 深夜・日またぎ対応（22.5-1.0 は 25.0扱いにする）
+                    e += 24.0; 
                 }
                 
                 return e - s;
                 
             } catch (NumberFormatException ex) {
-                // 万が一「9..5」のようにおかしな数字が入っていてエラーになった時用
                 return 0.0;
             }
         }

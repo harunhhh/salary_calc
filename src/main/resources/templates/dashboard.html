@@ -16,15 +16,15 @@
 <body>
     <div class="container">
         <div th:if="${errorMessage != null}" class="card error">
-            <h3>❌ エラーが発生しました</h3>
+            <h3> エラーが発生しました</h3>
             <p th:text="${errorMessage}"></p>
         </div>
 
-        <h2 style="color: #2c3e50;">📱 <span th:text="${userName}"></span>さんの給与ダッシュボード</h2>
+        <h2 style="color: #2c3e50;"> <span th:text="${userName}"></span>さんの給与ダッシュボード</h2>
 
         <div class="card">
             <form method="get" action="/">
-                <label>💰 時給: </label>
+                <label> 時給: </label>
                 <input type="number" name="wage" th:value="${hourlyWage}"> 円 
                 <button type="submit">再計算</button>
             </form>
@@ -35,12 +35,12 @@
         </div>
 
         <div th:if="${hasShifts == true}" class="card" style="background: #e8f4f8;">
-            <h3 style="margin-top:0;">📊 今月の集計</h3>
+            <h3 style="margin-top:0;"> 今月の集計</h3>
             <p>実働時間: <strong th:text="${totalWorkHours} + ' 時間'"></strong></p>
             <p>休憩時間: <span th:text="${totalBreakHours} + ' 時間'"></span></p>
             <p>残業時間: <span style="color:red;" th:text="${totalOvertimeHours} + ' 時間'"></span></p>
             <hr>
-            <h2 style="color:#e74c3c;">💴 予想給与: <span th:text="${#numbers.formatInteger(totalSalary, 1, 'COMMA')}"></span> 円</h2>
+            <h2 style="color:#e74c3c;"> 予想給与: <span th:text="${#numbers.formatInteger(totalSalary, 1, 'COMMA')}"></span> 円</h2>
             <p style="font-size:0.8em; color:#7f8c8d;">※残業代（時給1.25倍）を含みます</p>
         </div>
     </div>
