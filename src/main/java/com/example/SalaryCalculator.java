@@ -41,9 +41,8 @@ public class SalaryCalculator {
     }
 
     @GetMapping("/")
-    
 
-    public String home( 
+    public String home(
             @RegisteredOAuth2AuthorizedClient("google") OAuth2AuthorizedClient authorizedClient,
             @AuthenticationPrincipal OAuth2User oauth2User,
             @RequestParam(value = "year", required = false) Integer year,
@@ -83,18 +82,18 @@ public class SalaryCalculator {
             model.addAttribute("prevMonth", prevMonth.getMonthValue());
             model.addAttribute("nextYear", nextMonth.getYear());
             model.addAttribute("nextMonth", nextMonth.getMonthValue());
-            
+
             ZonedDateTime startOfMonth = targetMonth.atDay(1).atStartOfDay(ZoneId.systemDefault());
             ZonedDateTime endOfMonth = targetMonth.atEndOfMonth().atTime(23, 59, 59).atZone(ZoneId.systemDefault());
 
             DateTime timeMin = new DateTime(startOfMonth.toInstant().toEpochMilli());
             DateTime timeMax = new DateTime(endOfMonth.toInstant().toEpochMilli());
-            
+
             Events events = service.events().list("primary")
                     .setTimeMin(timeMin).setTimeMax(timeMax).setOrderBy("startTime").setSingleEvents(true).execute();
 
             List<Event> items = events.getItems();
-            
+
             double totalShiftHours = 0.0;
             double totalBreakHours = 0.0;
             double totalWorkHours = 0.0;
@@ -108,13 +107,13 @@ public class SalaryCalculator {
                 java.util.Map<String, Double> dailyHours = new java.util.HashMap<>();
 
                 for (Event event : items) {
-                    
                     String summary = event.getSummary();
                     double shiftHours = 0.0;
                     boolean hasTime = false;
                     String dateKey = getCalendar(event);
 
-                    if (dateKey.isEmpty()) continue;
+                    if (dateKey.isEmpty())
+                        continue;
 
                     if (summary != null) {
                         shiftHours = calculateHours(summary);
@@ -124,25 +123,32 @@ public class SalaryCalculator {
                     }
 
                     if (hasTime && shiftHours > 0) {
-                        dailyHours.put(dateKey, dailyHours.getOrDefault(dateKey, 0.0) + shiftHours);
+                        // 休憩を計算する
+                        double breakTime = calculateBreakTime(shiftHours);
+                        double actualWork = shiftHours - breakTime;
+
+                        // 休憩を引いたあとの実働時間を足す
+                        dailyHours.put(dateKey, dailyHours.getOrDefault(dateKey, 0.0) + actualWork);
+
+                        // シフトの拘束時間と休憩時間は、合計に足す
+                        totalShiftHours += shiftHours;
+                        totalBreakHours += breakTime;
                     }
                 }
 
-                for (double dailyShift : dailyHours.values()) {
-                    double breakTime = calculateBreakTime(dailyShift);
-                    double actualWork = dailyShift - breakTime;
+                // 残業代と給与の計算
+                for (double actualDailyWork : dailyHours.values()) {
                     double overtime = 0.0;
 
-                    if (actualWork > 8.0) {
-                        overtime = actualWork - 8.0;
+                    // 1日の実働時間が8時間を超えていれば残業としてカウント
+                    if (actualDailyWork > 8.0) {
+                        overtime = actualDailyWork - 8.0;
                     }
 
-                    totalShiftHours += dailyShift;
-                    totalBreakHours += breakTime;
-                    totalWorkHours += actualWork;
+                    totalWorkHours += actualDailyWork;
                     totalOvertimeHours += overtime;
 
-                    double normalWork = actualWork - overtime;
+                    double normalWork = actualDailyWork - overtime;
                     totalSalary += (int) ((normalWork * hourlyWage) + (overtime * hourlyWage * 1.25));
                 }
 
@@ -157,11 +163,10 @@ public class SalaryCalculator {
             model.addAttribute("errorMessage", e.getMessage());
             e.printStackTrace();
         }
-        
-        // dashboard.html を表示
-        return "dashboard"; 
-    }
 
+        // dashboard.html を表示
+        return "dashboard";
+    }
 
     public static String getCalendar(Event event) {
         if (event.getStart().getDateTime() != null) {
@@ -169,7 +174,7 @@ public class SalaryCalculator {
                     .format(new java.util.Date(event.getStart().getDateTime().getValue()));
         } else if (event.getStart().getDate() != null) {
             return event.getStart().getDate().toString().substring(0, 10);
-        } else{
+        } else {
             return "";
         }
     }
@@ -177,20 +182,20 @@ public class SalaryCalculator {
     public static double calculateHours(String summary) {
         // 文字が含まれていたら除外
         String regex = "^\\s*([0-9.]+)\\s*[-〜~]\\s*([0-9.]+)\\s*$";
-        
+
         java.util.regex.Matcher m = java.util.regex.Pattern.compile(regex).matcher(summary);
-        
+
         if (m.matches()) {
             try {
                 double s = Double.parseDouble(m.group(1));
                 double e = Double.parseDouble(m.group(2));
-                
+
                 if (e <= s) {
-                    e += 24.0; 
+                    e += 24.0;
                 }
-                
+
                 return e - s;
-                
+
             } catch (NumberFormatException ex) {
                 return 0.0;
             }
@@ -198,12 +203,12 @@ public class SalaryCalculator {
         return 0.0;
     }
 
-    public static double calculateBreakTime(double shiftTime){
-        if(shiftTime >= 8.0) {
+    public static double calculateBreakTime(double shiftTime) {
+        if (shiftTime >= 8.0) {
             return 1.0;
-        }else if(shiftTime >= 6.0){
+        } else if (shiftTime >= 6.0) {
             return 0.75;
-        }else {
+        } else {
             return 0.0;
         }
     }
